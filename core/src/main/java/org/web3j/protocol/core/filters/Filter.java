@@ -31,7 +31,9 @@ public abstract class Filter<T> {
     final Web3j web3j;
     final Callback<T> callback;
 
+    private volatile EthFilter ethFilter;
     private volatile BigInteger filterId;
+    private boolean filterFailed = false;
 
     private ScheduledFuture<?> schedule;
 
@@ -42,15 +44,7 @@ public abstract class Filter<T> {
 
     public void run(ScheduledExecutorService scheduledExecutorService, long blockTime) {
         try {
-            EthFilter ethFilter = sendRequest();
-            if (ethFilter.hasError()) {
-                throwException(ethFilter.getError());
-            }
-
-            filterId = ethFilter.getFilterId();
-            // this runs in the caller thread as if any exceptions are encountered, we shouldn't
-            // proceed with creating the scheduled task below
-            getInitialFilterLogs();
+            initFilter();
 
             /*
             We want the filter to be resilient against client issues. On numerous occasions
@@ -72,6 +66,10 @@ public abstract class Filter<T> {
             schedule = scheduledExecutorService.scheduleAtFixedRate(
                     () -> {
                         try {
+                            if (filterFailed) {
+                                prepareForRestart();
+                                initFilter();
+                            }
                             this.pollFilter(ethFilter);
                         } catch (Throwable e) {
                             // All exceptions must be caught, otherwise our job terminates without
@@ -85,9 +83,18 @@ public abstract class Filter<T> {
         }
     }
 
+    private void initFilter() throws IOException {
+        ethFilter = sendRequest();
+        if (ethFilter.hasError()) {
+            throwException(ethFilter.getError());
+        }
+        filterId = ethFilter.getFilterId();
+        getInitialFilterLogs();
+    }
+
     private void getInitialFilterLogs() {
         try {
-            Optional<Request<?, EthLog>> maybeRequest = this.getFilterLogs(this.filterId);
+            Optional<Request<?, EthLog>> maybeRequest = this.getFilterLogs(filterId);
             EthLog ethLog = null;
             if (maybeRequest.isPresent()) {
                 ethLog = maybeRequest.get().send();
@@ -110,8 +117,13 @@ public abstract class Filter<T> {
             throwException(e);
         }
         if (ethLog.hasError()) {
+            if (ethLog.getError().getCode() == -32000) {
+                log.warn("Filter {} is probably dead on geth side", filterId);
+                filterFailed = true;
+            }
             throwException(ethLog.getError());
         } else {
+            filterFailed = false;
             process(ethLog.getLogs());
         }
     }
@@ -119,6 +131,10 @@ public abstract class Filter<T> {
     abstract EthFilter sendRequest() throws IOException;
 
     abstract void process(List<EthLog.LogResult> logResults);
+
+    protected void prepareForRestart() {
+        //Default implementation doing nothing
+    }
 
     public void cancel() {
         schedule.cancel(false);

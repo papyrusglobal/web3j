@@ -31,6 +31,10 @@ public class EthFilter extends Filter<EthFilter> {
         this(fromBlock, toBlock, Arrays.asList(address));
     }
 
+    public void setFromBlock(DefaultBlockParameter fromBlock) {
+        this.fromBlock = fromBlock;
+    }
+
     public DefaultBlockParameter getFromBlock() {
         return fromBlock;
     }

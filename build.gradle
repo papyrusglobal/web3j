@@ -44,11 +44,12 @@ allprojects {
     targetCompatibility = 1.8
 
     group 'org.web3j'
-    version '3.3.1'
+    version '3.3.1-ppr'
 
     apply plugin: 'java'
     apply plugin: 'jacoco'
     apply plugin: 'checkstyle'
+    apply plugin: 'maven-publish'
 
     repositories {
         mavenCentral()
