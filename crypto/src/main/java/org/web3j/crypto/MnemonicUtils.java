@@ -1,5 +1,8 @@
 package org.web3j.crypto;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -12,6 +15,7 @@ import org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator;
 import org.bouncycastle.crypto.params.KeyParameter;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.stream.Collectors.toList;
 import static org.web3j.crypto.Hash.sha256;
 
 /**
@@ -160,12 +164,9 @@ public class MnemonicUtils {
     }
 
     private static List<String> populateWordList() {
-        URL url = Thread.currentThread().getContextClassLoader()
-                .getResource("en-mnemonic-word-list.txt");
-        try {
-            return Files.readAllLines(Paths.get(url.toURI()));
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
+        InputStream is = MnemonicUtils.class.getClassLoader()
+                .getResourceAsStream("en-mnemonic-word-list.txt");
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(is));
+        return bufferedReader.lines().collect(toList());
     }
 }
