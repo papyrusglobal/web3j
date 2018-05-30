@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
+import org.web3j.protocol.core.DefaultBlockParameterNumber;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.methods.response.EthFilter;
 import org.web3j.protocol.core.methods.response.EthLog;
@@ -17,12 +19,19 @@ import org.web3j.protocol.core.methods.response.Log;
 public class LogFilter extends Filter<Log> {
 
     private final org.web3j.protocol.core.methods.request.EthFilter ethFilter;
+    private volatile BigInteger lastBlock;
 
     public LogFilter(
             Web3j web3j, Callback<Log> callback,
             org.web3j.protocol.core.methods.request.EthFilter ethFilter) {
         super(web3j, callback);
         this.ethFilter = ethFilter;
+        DefaultBlockParameter defaultBlockParameter = ethFilter.getFromBlock();
+        if (defaultBlockParameter instanceof DefaultBlockParameterNumber) {
+            this.lastBlock = ((DefaultBlockParameterNumber) defaultBlockParameter).getBlockNumber();
+        } else {
+            this.lastBlock = BigInteger.ZERO;
+        }
     }
 
 
@@ -37,6 +46,7 @@ public class LogFilter extends Filter<Log> {
             if (logResult instanceof EthLog.LogObject) {
                 Log log = ((EthLog.LogObject) logResult).get();
                 callback.onEvent(log);
+                lastBlock = lastBlock.max(log.getBlockNumber());
             } else {
                 throw new FilterException(
                         "Unexpected result type: " + logResult.get() + " required LogObject");
@@ -47,5 +57,10 @@ public class LogFilter extends Filter<Log> {
     @Override
     protected Optional<Request<?, EthLog>> getFilterLogs(BigInteger filterId) {
         return Optional.of(web3j.ethGetFilterLogs(filterId));
+    }
+
+    @Override
+    protected void prepareForRestart() {
+        ethFilter.setFromBlock(DefaultBlockParameter.valueOf(lastBlock));
     }
 }
